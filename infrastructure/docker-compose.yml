@@ -1,0 +1,233 @@
+# ============================================================
+# docker-compose.yml
+# Emergency Response Coordination Platform
+#
+# Starts all microservices, PostgreSQL databases, and RabbitMQ
+# in isolated containers with a shared network.
+#
+# Usage:
+#   docker-compose up --build      # First run
+#   docker-compose up -d           # Background
+#   docker-compose down            # Stop all
+# ============================================================
+
+version: '3.8'
+
+# ── Shared network ───────────────────────────────────────────
+networks:
+  erp_network:
+    driver: bridge
+
+# ── Named volumes (persistent DB data) ──────────────────────
+volumes:
+  auth_db_data:
+  incident_db_data:
+  dispatch_db_data:
+  analytics_db_data:
+  rabbitmq_data:
+
+services:
+
+  # ── RabbitMQ Message Broker ────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: erp_rabbitmq
+    ports:
+      - "5672:5672"       # AMQP protocol
+      - "15672:15672"     # Management UI → http://localhost:15672 (guest/guest)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - erp_network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Auth Database ──────────────────────────────────────────
+  auth_db:
+    image: postgres:15-alpine
+    container_name: erp_auth_db
+    environment:
+      POSTGRES_DB:       auth_db
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+      - ../database/auth-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5433:5432"
+    networks:
+      - erp_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Incident Database ──────────────────────────────────────
+  incident_db:
+    image: postgres:15-alpine
+    container_name: erp_incident_db
+    environment:
+      POSTGRES_DB:       incident_db
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - incident_db_data:/var/lib/postgresql/data
+      - ../database/incident-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5434:5432"
+    networks:
+      - erp_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Dispatch Database ──────────────────────────────────────
+  dispatch_db:
+    image: postgres:15-alpine
+    container_name: erp_dispatch_db
+    environment:
+      POSTGRES_DB:       dispatch_db
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - dispatch_db_data:/var/lib/postgresql/data
+      - ../database/dispatch-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5435:5432"
+    networks:
+      - erp_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Analytics Database ─────────────────────────────────────
+  analytics_db:
+    image: postgres:15-alpine
+    container_name: erp_analytics_db
+    environment:
+      POSTGRES_DB:       analytics_db
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - analytics_db_data:/var/lib/postgresql/data
+      - ../database/analytics-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5436:5432"
+    networks:
+      - erp_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Auth Microservice ──────────────────────────────────────
+  auth_service:
+    build:
+      context: ../backend/auth-service
+      dockerfile: Dockerfile
+    container_name: erp_auth_service
+    ports:
+      - "3001:3001"
+    environment:
+      PORT:                 3001
+      DB_HOST:              auth_db
+      DB_PORT:              5432
+      DB_NAME:              auth_db
+      DB_USER:              postgres
+      DB_PASSWORD:          postgres
+      JWT_SECRET:           change_this_secret_in_production
+      JWT_EXPIRES_IN:       15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+    depends_on:
+      auth_db:
+        condition: service_healthy
+    networks:
+      - erp_network
+    restart: unless-stopped
+
+  # ── Incident Microservice ──────────────────────────────────
+  incident_service:
+    build:
+      context: ../backend/incident-service
+      dockerfile: Dockerfile
+    container_name: erp_incident_service
+    ports:
+      - "3002:3002"
+    environment:
+      PORT:        3002
+      DB_HOST:     incident_db
+      DB_PORT:     5432
+      DB_NAME:     incident_db
+      DB_USER:     postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET:  change_this_secret_in_production
+      RABBITMQ_URL: amqp://rabbitmq
+    depends_on:
+      incident_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - erp_network
+    restart: unless-stopped
+
+  # ── Dispatch Microservice ──────────────────────────────────
+  dispatch_service:
+    build:
+      context: ../backend/dispatch-service
+      dockerfile: Dockerfile
+    container_name: erp_dispatch_service
+    ports:
+      - "3003:3003"
+    environment:
+      PORT:        3003
+      DB_HOST:     dispatch_db
+      DB_PORT:     5432
+      DB_NAME:     dispatch_db
+      DB_USER:     postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET:  change_this_secret_in_production
+      RABBITMQ_URL: amqp://rabbitmq
+    depends_on:
+      dispatch_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - erp_network
+    restart: unless-stopped
+
+  # ── Analytics Microservice ─────────────────────────────────
+  analytics_service:
+    build:
+      context: ../backend/analytics-service
+      dockerfile: Dockerfile
+    container_name: erp_analytics_service
+    ports:
+      - "3004:3004"
+    environment:
+      PORT:        3004
+      DB_HOST:     analytics_db
+      DB_PORT:     5432
+      DB_NAME:     analytics_db
+      DB_USER:     postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET:  change_this_secret_in_production
+      RABBITMQ_URL: amqp://rabbitmq
+    depends_on:
+      analytics_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - erp_network
+    restart: unless-stopped

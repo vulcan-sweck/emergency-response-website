@@ -1,0 +1,16 @@
+# Node
+node_modules/
+
+# PlatformIO
+.pio/
+.vscode/
+
+# Build folders
+build/
+dist/
+
+# Cache
+.cache/
+
+# Logs
+*.log

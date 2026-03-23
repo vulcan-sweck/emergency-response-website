@@ -1,0 +1,225 @@
+openapi: 3.0.0
+info:
+  title: Analytics & Monitoring Service API
+  description: Aggregates data from resolved incidents to produce operational statistics. Powers the analytics dashboard charts in the Flutter app.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3004
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Analytics
+    description: Operational statistics and reporting
+
+paths:
+
+  /analytics/response-times:
+    get:
+      tags: [Analytics]
+      summary: Get average response times by service type
+      description: Returns average, minimum, and maximum response times in seconds for each emergency service type over a given period.
+      parameters:
+        - $ref: '#/components/parameters/DaysParam'
+      responses:
+        '200':
+          description: Response time statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseTimeResult'
+              example:
+                period_days: 30
+                data:
+                  - service_type: ambulance
+                    avg_seconds: 245
+                    min_seconds: 120
+                    max_seconds: 610
+                    event_count: 8
+                  - service_type: fire
+                    avg_seconds: 390
+                    min_seconds: 180
+                    max_seconds: 720
+                    event_count: 5
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/incidents-by-region:
+    get:
+      tags: [Analytics]
+      summary: Get incident count grouped by region
+      description: Returns the total number of incidents per geographic region over a given period. Used for the bar chart on the analytics dashboard.
+      parameters:
+        - $ref: '#/components/parameters/DaysParam'
+      responses:
+        '200':
+          description: Incidents by region
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegionResult'
+              example:
+                period_days: 30
+                data:
+                  - region: Accra Central
+                    incident_count: 5
+                  - region: Kumasi
+                    incident_count: 3
+                  - region: Tamale
+                    incident_count: 2
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/resource-utilization:
+    get:
+      tags: [Analytics]
+      summary: Get resource utilisation by service type
+      description: Returns total events handled and average resolution time per service type. Used for the pie chart on the analytics dashboard.
+      parameters:
+        - $ref: '#/components/parameters/DaysParam'
+      responses:
+        '200':
+          description: Resource utilisation statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceResult'
+              example:
+                period_days: 30
+                data:
+                  - service_type: ambulance
+                    total_events: 8
+                    avg_resolution_minutes: 45.2
+                  - service_type: fire
+                    total_events: 5
+                    avg_resolution_minutes: 90.0
+                  - service_type: police
+                    total_events: 4
+                    avg_resolution_minutes: 60.5
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /health:
+    get:
+      tags: [Analytics]
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              example:
+                status: ok
+                service: analytics-service
+
+components:
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    DaysParam:
+      name: days
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 30
+        enum: [7, 30, 90]
+      description: Time period in days to aggregate data over (default 30)
+
+  schemas:
+
+    ResponseTimeStat:
+      type: object
+      properties:
+        service_type:
+          type: string
+          enum: [fire, ambulance, police, rescue]
+        avg_seconds:
+          type: integer
+          description: Average response time in seconds
+        min_seconds:
+          type: integer
+          description: Fastest response time in seconds
+        max_seconds:
+          type: integer
+          description: Slowest response time in seconds
+        event_count:
+          type: integer
+          description: Total number of incidents in this period
+
+    RegionStat:
+      type: object
+      properties:
+        region:
+          type: string
+          example: Accra Central
+        incident_count:
+          type: integer
+          example: 5
+
+    ResourceStat:
+      type: object
+      properties:
+        service_type:
+          type: string
+          enum: [fire, ambulance, police, rescue]
+        total_events:
+          type: integer
+          description: Total incidents handled in this period
+        avg_resolution_minutes:
+          type: number
+          format: double
+          description: Average time in minutes from incident creation to resolution
+
+    ResponseTimeResult:
+      type: object
+      properties:
+        period_days:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResponseTimeStat'
+
+    RegionResult:
+      type: object
+      properties:
+        period_days:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegionStat'
+
+    ResourceResult:
+      type: object
+      properties:
+        period_days:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResourceStat'
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Unauthorized — missing or invalid JWT token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
