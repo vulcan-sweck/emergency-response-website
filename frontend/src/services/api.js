@@ -5,7 +5,7 @@
 import axios from 'axios';
 
 const BASE = {
-  auth:      'https://analytics-service-fngs.onrender.com',
+  auth:      'https://auth-service-li7b.onrender.com',
   incident:  'https://incident-service-m9g7.onrender.com',
   dispatch:  'https://dispatch-service.onrender.com',
   analytics: 'https://analytics-service-fngs.onrender.com',
