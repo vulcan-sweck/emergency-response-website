@@ -5,10 +5,10 @@
 import axios from 'axios';
 
 const BASE = {
-  auth:      'http://localhost:3001',
-  incident:  'http://localhost:3002',
-  dispatch:  'http://localhost:3003',
-  analytics: 'http://localhost:3004',
+  auth:      'https://analytics-service-fngs.onrender.com',
+  incident:  'https://incident-service-m9g7.onrender.com',
+  dispatch:  'https://dispatch-service.onrender.com',
+  analytics: 'https://analytics-service-fngs.onrender.com',
 };
 
 // Create one axios instance per service
