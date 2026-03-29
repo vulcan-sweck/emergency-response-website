@@ -27,8 +27,10 @@ const makeClient = (baseURL) => {
     (res) => res,
     async (err) => {
       if (err.response?.status === 401) {
-        localStorage.clear();
-        window.location.href = '/login';
+        if (!window.location.pathname.includes('/login')) {
+          localStorage.clear();
+          window.location.href = '/login';
+        }
       }
       return Promise.reject(err);
     }
